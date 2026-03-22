@@ -1,7 +1,5 @@
 import copy
 import re
-import subprocess
-import shutil
 import argparse
 from pathlib import Path
 from collections import OrderedDict
@@ -130,26 +128,26 @@ def generate_document(template_path: Path, data: dict, output_path: Path):
 
 
 def convert_to_pdf(docx_path: Path, output_dir: Path) -> Path | None:
-    """docx를 PDF로 변환한다. LibreOffice가 필요."""
-    soffice = shutil.which("soffice") or shutil.which("libreoffice")
-    if not soffice:
-        print(f"[WARN] LibreOffice가 설치되어 있지 않아 PDF 변환을 건너뜁니다: {docx_path.name}")
+    """docx를 PDF로 변환한다. Microsoft Word가 필요 (macOS/Windows)."""
+    try:
+        from docx2pdf import convert
+    except ImportError:
+        print(f"[WARN] docx2pdf가 설치되어 있지 않습니다. 'pip install docx2pdf'로 설치하세요: {docx_path.name}")
         return None
 
-    subprocess.run(
-        [soffice, "--headless", "--convert-to", "pdf", "--outdir", str(output_dir), str(docx_path)],
-        check=True,
-        capture_output=True,
-    )
     pdf_path = output_dir / docx_path.with_suffix(".pdf").name
+    convert(str(docx_path), str(pdf_path))
     return pdf_path if pdf_path.exists() else None
 
 
 def main():
     parser = argparse.ArgumentParser(description="IO 문서 자동 생성기")
     parser.add_argument("--input", "-i", required=True, help="입력 엑셀 파일 경로")
-    parser.add_argument("--template", "-t", default="io-sample.docx", help="템플릿 docx 경로")
-    parser.add_argument("--output", "-o", default="output", help="출력 디렉토리")
+    script_dir = Path(__file__).resolve().parent
+    project_root = script_dir.parent
+
+    parser.add_argument("--template", "-t", default=str(script_dir / "io-sample.docx"), help="템플릿 docx 경로")
+    parser.add_argument("--output", "-o", default=str(project_root / "output"), help="출력 디렉토리")
     parser.add_argument("--no-pdf", action="store_true", help="PDF 변환 건너뛰기")
     args = parser.parse_args()
 

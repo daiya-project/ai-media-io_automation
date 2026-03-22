@@ -1,32 +1,41 @@
+import sys
 import pytest
 from pathlib import Path
 from docx import Document
+
+# src/ 디렉토리를 import 경로에 추가
+SRC_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(SRC_DIR))
+
+TEMPLATE = SRC_DIR / "io-sample.docx"
+SAMPLE_DATA = SRC_DIR.parent / "data" / "sample.xlsx"
+
 
 def test_read_and_group_excel():
     """엑셀 파일을 읽어 client_name 기준으로 그룹핑한다."""
     from generate import read_excel_data
 
-    groups = read_excel_data(Path("sample-data.xlsx"))
+    groups = read_excel_data(SAMPLE_DATA)
 
-    assert len(groups) == 2  # 테스트매체A, 테스트매체B
+    assert len(groups) == 4  # 조선일보, 인벤, 뽐뿌, 매일경제
 
-    group_a = groups["테스트매체A"]
-    assert group_a["client_name"] == "테스트매체A"
-    assert group_a["client_address"] == "서울시 강남구 역삼동 123"
-    assert group_a["client_email"] == "a@test.com"
-    assert group_a["client_manager"] == "김철수"
-    assert group_a["gross_rate"] == "50%"
-    assert len(group_a["widgets"]) == 3
+    group = groups["조선일보"]
+    assert group["client_name"] == "조선일보"
+    assert group["client_address"] == "서울시 중구 세종대로 21길 30"
+    assert group["client_email"] == "ad@chosun.com"
+    assert group["client_manager"] == "박지현"
+    assert group["gross_rate"] == "55%"
+    assert len(group["widgets"]) == 3
 
-    widget0 = group_a["widgets"][0]
-    assert widget0["service"] == "매체A-1"
-    assert widget0["service_name"] == "a1.example.com"
-    assert widget0["widget_name"] == "위젯Alpha"
-    assert widget0["value"] == "CPM 1,000원"
+    widget0 = group["widgets"][0]
+    assert widget0["service"] == "조선일보"
+    assert widget0["service_name"] == "chosun.com"
+    assert widget0["widget_name"] == "메인 하단 위젯"
+    assert widget0["value"] == "CPM 1,500원"
     assert widget0["date_start"] == "2026-04-01"
 
-    group_b = groups["테스트매체B"]
-    assert len(group_b["widgets"]) == 1
+    assert len(groups["뽐뿌"]["widgets"]) == 1
+    assert len(groups["매일경제"]["widgets"]) == 4
 
 
 def test_replace_simple_variables(tmp_path):
@@ -46,19 +55,16 @@ def test_replace_simple_variables(tmp_path):
     }
 
     output_path = tmp_path / "test-output.docx"
-    generate_document(Path("io-sample.docx"), data, output_path)
+    generate_document(TEMPLATE, data, output_path)
 
     doc = Document(output_path)
 
-    # Table 0 (Contact Info)에서 client_name 확인
     table0 = doc.tables[0]
     assert "테스트매체A" in table0.rows[1].cells[4].text
 
-    # Table 2에서 gross_rate 확인
     table2 = doc.tables[2]
     assert "50%" in table2.rows[0].cells[1].text
 
-    # Table 3 (서명)에서 client_manager 확인
     table3 = doc.tables[3]
     assert "김철수" in table3.rows[1].cells[3].text
 
@@ -82,14 +88,12 @@ def test_dynamic_widget_rows(tmp_path):
     }
 
     output_path = tmp_path / "test-dynamic.docx"
-    generate_document(Path("io-sample.docx"), data, output_path)
+    generate_document(TEMPLATE, data, output_path)
 
     doc = Document(output_path)
     table1 = doc.tables[1]
 
-    # 헤더 1행 + 위젯 5행 = 6행
     assert len(table1.rows) == 6
 
-    # 각 행의 첫 번째 셀에 매체명이 들어있는지 확인
     for i in range(5):
         assert f"매체{i}" in table1.rows[i + 1].cells[0].text

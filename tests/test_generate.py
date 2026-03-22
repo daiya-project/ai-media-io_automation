@@ -1,5 +1,6 @@
 import pytest
 from pathlib import Path
+from docx import Document
 
 def test_read_and_group_excel():
     """엑셀 파일을 읽어 client_name 기준으로 그룹핑한다."""
@@ -26,3 +27,37 @@ def test_read_and_group_excel():
 
     group_b = groups["테스트매체B"]
     assert len(group_b["widgets"]) == 1
+
+
+def test_replace_simple_variables(tmp_path):
+    """docx 내 단순 변수({client_name} 등)를 치환한다."""
+    from generate import generate_document
+
+    data = {
+        "client_name": "테스트매체A",
+        "client_address": "서울시 강남구 역삼동 123",
+        "client_email": "a@test.com",
+        "client_manager": "김철수",
+        "gross_rate": "50%",
+        "widgets": [
+            {"service": "매체A", "service_name": "a.com", "widget_name": "위젯1",
+             "value": "CPM 1,000원", "date_start": "2026-04-01"},
+        ],
+    }
+
+    output_path = tmp_path / "test-output.docx"
+    generate_document(Path("io-sample.docx"), data, output_path)
+
+    doc = Document(output_path)
+
+    # Table 0 (Contact Info)에서 client_name 확인
+    table0 = doc.tables[0]
+    assert "테스트매체A" in table0.rows[1].cells[4].text
+
+    # Table 2에서 gross_rate 확인
+    table2 = doc.tables[2]
+    assert "50%" in table2.rows[0].cells[1].text
+
+    # Table 3 (서명)에서 client_manager 확인
+    table3 = doc.tables[3]
+    assert "김철수" in table3.rows[1].cells[3].text

@@ -97,3 +97,26 @@ def test_dynamic_widget_rows(tmp_path):
 
     for i in range(5):
         assert f"매체{i}" in table1.rows[i + 1].cells[0].text
+
+
+def test_read_csv_data(tmp_path):
+    """CSV 파일을 읽어 client_name 기준으로 그룹핑한다."""
+    from generate import read_input_data
+
+    csv_file = tmp_path / "test.csv"
+    csv_file.write_text(
+        "client_name,client_address,client_email,client_manager,gross_rate,"
+        "service,service_name,widget_name,value,date_start\n"
+        "A사,서울시 강남구,a@a.com,김철수,50%,매체A,a.com,위젯1,CPM 1000원,2026-04-01\n"
+        "A사,서울시 강남구,a@a.com,김철수,50%,매체A,a.com,위젯2,CPM 800원,2026-04-01\n"
+        "B사,부산시 해운대,b@b.com,이영희,45%,매체B,b.com,위젯3,CPM 900원,2026-05-01\n",
+        encoding="utf-8-sig",
+    )
+
+    groups = read_input_data(csv_file)
+
+    assert len(groups) == 2
+    assert groups["A사"]["client_address"] == "서울시 강남구"
+    assert len(groups["A사"]["widgets"]) == 2
+    assert len(groups["B사"]["widgets"]) == 1
+    assert groups["B사"]["widgets"][0]["widget_name"] == "위젯3"

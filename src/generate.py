@@ -1,4 +1,5 @@
 import copy
+import csv
 import re
 import argparse
 from pathlib import Path
@@ -11,28 +12,50 @@ COMMON_FIELDS = ["client_name", "client_address", "client_email", "client_manage
 WIDGET_FIELDS = ["service", "service_name", "widget_name", "value", "date_start"]
 
 
-def read_excel_data(excel_path: Path) -> OrderedDict:
-    """엑셀 파일을 읽어 client_name 기준으로 그룹핑하여 반환한다."""
-    wb = openpyxl.load_workbook(excel_path)
+def _read_rows_xlsx(path: Path) -> list[dict]:
+    """xlsx 파일에서 행 목록을 읽는다."""
+    wb = openpyxl.load_workbook(path)
     ws = wb.active
-
     headers = [cell.value for cell in ws[1]]
-    groups = OrderedDict()
+    return [dict(zip(headers, row)) for row in ws.iter_rows(min_row=2, values_only=True)]
 
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        row_dict = dict(zip(headers, row))
-        name = str(row_dict["client_name"])
+
+def _read_rows_csv(path: Path) -> list[dict]:
+    """csv 파일에서 행 목록을 읽는다."""
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        return list(csv.DictReader(f))
+
+
+def read_input_data(input_path: Path) -> OrderedDict:
+    """xlsx 또는 csv 파일을 읽어 client_name 기준으로 그룹핑하여 반환한다."""
+    ext = input_path.suffix.lower()
+    if ext == ".csv":
+        rows = _read_rows_csv(input_path)
+    elif ext in (".xlsx", ".xls"):
+        rows = _read_rows_xlsx(input_path)
+    else:
+        raise ValueError(f"지원하지 않는 파일 형식입니다: {ext} (xlsx 또는 csv만 가능)")
+
+    groups = OrderedDict()
+    for row_dict in rows:
+        name = str(row_dict["client_name"] or "").strip()
+        if not name:
+            continue
 
         if name not in groups:
             groups[name] = {
-                field: str(row_dict[field] or "") for field in COMMON_FIELDS
+                field: str(row_dict.get(field) or "") for field in COMMON_FIELDS
             }
             groups[name]["widgets"] = []
 
-        widget = {field: str(row_dict[field] or "") for field in WIDGET_FIELDS}
+        widget = {field: str(row_dict.get(field) or "") for field in WIDGET_FIELDS}
         groups[name]["widgets"].append(widget)
 
     return groups
+
+
+# 하위 호환성
+read_excel_data = read_input_data
 
 
 def _replace_in_paragraph(paragraph, replacements: dict):
@@ -142,7 +165,7 @@ def convert_to_pdf(docx_path: Path, output_dir: Path) -> Path | None:
 
 def main():
     parser = argparse.ArgumentParser(description="IO 문서 자동 생성기")
-    parser.add_argument("--input", "-i", required=True, help="입력 엑셀 파일 경로")
+    parser.add_argument("--input", "-i", required=True, help="입력 데이터 파일 경로 (xlsx 또는 csv)")
     script_dir = Path(__file__).resolve().parent
     project_root = script_dir.parent
 
@@ -155,7 +178,7 @@ def main():
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    groups = read_excel_data(Path(args.input))
+    groups = read_input_data(Path(args.input))
     print(f"총 {len(groups)}개 매체사 발견")
 
     for name, data in groups.items():
